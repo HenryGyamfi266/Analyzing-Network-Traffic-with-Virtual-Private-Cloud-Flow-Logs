@@ -106,3 +106,11 @@ LIMIT
 15
 12. Clicked Run.
 The results table had source IP and is sorted by the highest amount of bytes sent to the web-server. 
+
+**Task4**-Setting up VPC Flow Log Aggregation
+1. In the Console, navigated to Navigation menu > VPC network > VPC networks.
+2. Clicked vpc-net, and then clicked Edit.
+3. In the Subnets tab, clicked vpc-subnet. Clicked Edit > Configure logs. Set the Aggregation Interval to 30 seconds.Set the Sample rate to 25%. Clicked Save
+Setting the aggregation level to 30 seconds can reduce the flow logs size by up to 83% compared to the default aggregation interval of 5 seconds. 
+
+
