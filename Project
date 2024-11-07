@@ -1,0 +1,108 @@
+**Task1**-Configuring a custom network with VPC Flow Logs
+1. First, I created the custom network. In the Google cloud Console, navigated to Navigation menu > VPC network > VPC networks.
+2. Clicked Create VPC Network. Set the following values, left others at defaults:
+*Property*     *Value* 
+Name	          vpc-net
+Description	    Enter an optional description
+3. For Subnet creation mode, clicked Custom. Filled in this values and left the rest at default
+Property	         Value (type value or select option as specified)
+Name	             vpc-subnet
+Region             ____
+IPv4 range	       10.1.3.0/24
+Flow Logs	         On
+4. Clicked done and clicked created.
+5. Next, I Createa a firewall rule. In the left menu, clicked Firewall. Clicked Create Firewall Rule.
+Set the following values, left others at their defaults:
+
+Property                	Value (type value or select option as specified)
+Name	                    allow-http-ssh
+Network                 	vpc-net
+Targets                  	Specified target tags
+Target tags	              http-server
+Source filter	            IPv4 ranges
+Source IPv4 ranges	       0.0.0.0/0
+Protocols and ports	      Specified protocols and ports, and then check tcp, type: 80, 22
+6. Clicked Create.
+
+**Task2**-Creating an Apache web server
+1. In the Console, navigate to Navigation menu (Navigation menu icon) > Compute Engine > VM instances. Clicked CREATE INSTANCE.
+2. Set the following values and left the rest at default:
+Property	                 Value (type value or select option as specified)
+Name	                     web-server
+Region                    	____
+Zone                      	____
+Machine type	             e2-micro (2 vCPU, 1GB memory)
+Firewall	                 Allow HTTP traffic
+3. Clicked Networking, disks, security, management, sole-tenancy. Clicked Networking. For Network interfaces, clicked on default to edit.
+4. Set the following values, Clicked Done, and then clicked Create.:
+Property	            Value
+Network	              vpc-net
+Subnetwork          	vpc-subnet
+
+Then, I Configured the VM instance that I created as an Apache webserver and overwrote the default web page. This is what I did.
+5. Return to the Console, still on the VM instances page (Navigation menu (Navigation menu icon) > Compute Engine > VM instances). For web-server, clicked SSH to launch a terminal and connect.
+6. In the web-server SSH terminal, updated the package index with code:
+# sudo apt-get update
+7. Installed the Apache2 package with code:
+# sudo apt-get install apache2 -y
+8. Created a new default web page by overwriting the default:
+# echo '<!doctype html><html><body><h1>Hello World!</h1></body></html>' | sudo tee /var/www/html/index.html
+9. Exit the SSH terminal with command:
+# exit
+
+**Task3**-Verifying that the network traffic is logged
+Here, I start by generating network traffic through the following processes:
+1. On the Console, still on the VM instances page (Navigation menu (Navigation menu icon) > Compute Engine > VM instances).
+2. To view web-server, clicked the External IP to access the server.
+3. To Access the VPC Flow Logs, in the Console, navigated to Navigation menu > View All Products > Logging > Logs Explorer.
+4. In the Log fields panel, under Resource type, clicked Subnetwork. In the Query results pane, entries from the subnetwork logs appeared.
+5. In the Log fields panel, under Log name, clicked compute.googleapis.com/vpc_flows.
+6. Entered my IP address in the Query search box at the top. Then Clicked Run Query.
+7. Clicked on the log entries, expanded it and watched monitored of the connections
+
+**Task4**-Exporting the network traffic to BigQuery to further analyze the logs
+1. First, created an export sink. In the Console, in the left pane, clicked Logs Explorer.
+2. From Resources dropdown, selected Subnetwork. Then clicked Apply.
+3. From Log name dropdown, check vpc_flows and clicked Apply. Then, clicked Run query.
+4. Clicked More Actions > Create Sink. For "Sink Name", typed vpc-flows and clicked NEXT.
+5. For "Select sink service", selected the BigQuery dataset. For "Sink Destination", selected Create new BigQuery dataset. For "Dataset ID", typed bq_vpcflows, and then clicked CREATE DATASET.
+6. Clicked CREATE SINK. The Logs Router Sinks page appeared. Saw the sink created (vpc-flows). 
+
+Generating log traffic for BigQuery
+Now that the network traffic logs are exported to BigQuery, I generated more traffic for BigQuery by accessing the web-server several times. 
+7. In the Console, navigated to Navigation menu (Navigation menu icon) > Compute Engine > VM instances.
+8. In the Cloud Shell command line, run the following command to store the EXTERNAL_IP in an environment variable. 
+# export MY_SERVER=<Generate log traffic for BigQuery
+Now that the network traffic logs are exported to BigQuery, generate more traffic by accessing the web-server several times. Using Cloud Shell, you can curl the IP Address of the web-server several times.
+
+In the Console, navigate to Navigation menu (Navigation menu icon) > Compute Engine > VM instances.
+Note the External IP address for the web-server instance to use in the next step. It will be referred to as EXTERNAL_IP.
+9. In the Cloud Shell command line, run the following command to store the EXTERNAL_IP in an environment variable. Replace the <EXTERNAL_IP> with the address you just noted:
+export MY_SERVER=<EXTERNAL_IP>
+10. Access the web-server 50 times from Cloud Shell:
+# for ((i=1;i<=50;i++)); do curl $MY_SERVER; done>
+
+Analyze the VPC Flow Logs in BigQuery
+To analyze the logs in the BigQuery, I typed the code below
+11. Created a new query in the Query Editor with the following and replace your_table_id with TABLE_ID while leaving the accents (`) on both sides:
+#standardSQL
+SELECT
+jsonPayload.connection.src_ip,
+jsonPayload.connection.dest_ip,
+SUM(CAST(jsonPayload.bytes_sent AS INT64)) AS bytes,
+jsonPayload.connection.dest_port,
+jsonPayload.connection.protocol
+FROM
+`bq_vpcflows.your_compute_googleapis_com_vpc_flows_20241024`
+WHERE jsonPayload.reporter = 'DEST'
+GROUP BY
+jsonPayload.connection.src_ip,
+jsonPayload.connection.dest_ip,
+jsonPayload.connection.dest_port,
+jsonPayload.connection.protocol
+ORDER BY
+bytes DESC
+LIMIT
+15
+12. Clicked Run.
+The results table had source IP and is sorted by the highest amount of bytes sent to the web-server. 
